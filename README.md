@@ -23,6 +23,11 @@ SmartBin is designed as a modular, ROS-based smart waste sorting system that com
 
 The idea is to create a scalable perception-to-action pipeline that could later be deployed on real robotic hardware.
 
+Full system sketch (handmade 👈 and prompted with a generative AI model 👉)
+
+
+![Full system sketch](imgs/full_system.png)
+
 ---
 ### 📦 Dataset  
 
