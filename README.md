@@ -62,4 +62,24 @@ This phase establishes a clean baseline before moving into optimization, data ba
 
 ---
 
+## ⚙️ System Implementation Status
+
+### Robot Manipulation Simulation (ros_ws)
+
+The robotic hand simulation code is currently **in progress** and **under testing**. The initial implementation has been inspired and modified from the [santoshbalaji/pick_and_place](https://github.com/santoshbalaji/pick_and_place) repository.
+
+### YOLO Detector Integration (yolo_detector_ros2)
+
+A **non-Accelerator based inference node** has been added for initial testing purposes using the **Phase 1 YOLOv8s model weights**. This node allows testing the perception pipeline independently before accelerator deployment.
+
+### 🟢 Current Status
+
+- ✅ **Helper nodes** (camera, display, video stream, save annotated) — **running**  
+- ✅ **YOLO detector node** (phase 1 inference) — **running**  
+- ✅ **Dummy simulation** with 2 test values — **working independently** from detection pipeline  
+
+The system components are currently running and validated separately. Integration between the perception pipeline (detection) and the manipulation pipeline (simulation) is in ongoing development.
+
+---
+
 More updates coming soon 🚀

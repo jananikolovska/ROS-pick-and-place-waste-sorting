@@ -1,0 +1,125 @@
+cmake_minimum_required(VERSION 3.8)
+project(pick_and_place_test_nodes)
+
+# Default to C11
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 11)
+endif()
+# Default to C++17
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
+
+if(NOT WIN32)
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(control_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(moveit_ros_planning_interface REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(gazebo_msgs REQUIRED)
+
+add_executable(test_sending_trajectory src/test_sending_trajectory.cpp)
+
+ament_target_dependencies(test_sending_trajectory
+  rclcpp
+  rclcpp_action
+  control_msgs
+)
+
+add_executable(test_send_joint_space_goal src/test_send_joint_space_goal.cpp)
+
+ament_target_dependencies(test_send_joint_space_goal
+  rclcpp
+  moveit_core
+  moveit_ros_planning_interface
+)
+
+add_executable(test_send_cartesian_goal src/test_send_cartesian_goal.cpp)
+
+ament_target_dependencies(test_send_cartesian_goal
+  rclcpp
+  moveit_core
+  moveit_ros_planning_interface
+)
+
+add_executable(test_add_virtual_obstacles src/test_add_virtual_obstacles.cpp)
+
+ament_target_dependencies(test_add_virtual_obstacles
+  rclcpp
+  moveit_core
+  moveit_ros_planning_interface
+  moveit_msgs
+)
+
+add_executable(test_pick_and_place src/test_pick_and_place.cpp)
+
+ament_target_dependencies(test_pick_and_place
+  rclcpp
+  std_srvs
+  moveit_core
+  moveit_ros_planning_interface
+)
+
+add_executable(test_pick_and_place_two_objects src/test_pick_and_place_two_objects.cpp)
+
+ament_target_dependencies(test_pick_and_place_two_objects
+  rclcpp
+  std_srvs
+  geometry_msgs
+  gazebo_msgs
+  moveit_core
+  moveit_ros_planning_interface
+)
+
+add_executable(fake_camera_detector src/fake_camera_detector.cpp)
+
+ament_target_dependencies(fake_camera_detector
+  rclcpp
+  std_msgs
+  geometry_msgs
+  gazebo_msgs
+)
+
+add_executable(vision_based_pick_and_place src/vision_based_pick_and_place.cpp)
+
+ament_target_dependencies(vision_based_pick_and_place
+  rclcpp
+  std_msgs
+  std_srvs
+  geometry_msgs
+  gazebo_msgs
+  moveit_core
+  moveit_ros_planning_interface
+)
+
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_lint_auto REQUIRED)
+
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+## Install
+install(
+  TARGETS
+    test_sending_trajectory test_send_joint_space_goal test_send_cartesian_goal test_add_virtual_obstacles test_pick_and_place test_pick_and_place_two_objects fake_camera_detector vision_based_pick_and_place
+  DESTINATION
+    lib/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_package()
