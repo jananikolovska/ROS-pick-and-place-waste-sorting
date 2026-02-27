@@ -17,6 +17,7 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Image
+from std_msgs.msg import Int32
 from cv_bridge import CvBridge
 
 from vision_msgs.msg import Detection2DArray, Detection2D, BoundingBox2D, ObjectHypothesisWithPose, ObjectHypothesis, Pose2D, Point2D
@@ -63,6 +64,10 @@ class YoloDetectorNode(Node):
         self.declare_parameter("stable_frames_required", 10)  # Require 10 overlapping detections (~1.7s)
         self.declare_parameter("variance_threshold", 15.0)  # Max bbox position variance (pixels) for stability
         self.declare_parameter("destabilize_threshold", 50.0)  # Movement (pixels) to mark as destabilized
+        self.declare_parameter("keep_largest_only", True)  # Keep only largest object if multiple detected
+        self.declare_parameter("save_results", True)  # Save annotated images to disk
+        self.declare_parameter("debug_prints", True)  # Enable debug print statements
+        self.declare_parameter("publish_interval", 0.25)  # Publish interval in seconds
         print("DEBUG: All parameters declared successfully")
 
         # ============================================================
@@ -117,6 +122,22 @@ class YoloDetectorNode(Node):
         # Directory where annotated images will be saved
         self.save_dir = self.get_parameter("save_dir").get_parameter_value().string_value
         print(f"DEBUG: save_dir = '{self.save_dir}'")
+        
+        # Keep only largest object if multiple objects detected
+        self.keep_largest_only = self.get_parameter("keep_largest_only").get_parameter_value().bool_value
+        print(f"DEBUG: keep_largest_only = {self.keep_largest_only}")
+        
+        # Save annotated images flag
+        self.save_results = self.get_parameter("save_results").get_parameter_value().bool_value
+        print(f"DEBUG: save_results = {self.save_results}")
+        
+        # Debug prints flag
+        self.debug_prints = self.get_parameter("debug_prints").get_parameter_value().bool_value
+        print(f"DEBUG: debug_prints = {self.debug_prints}")
+        
+        # Publishing interval (seconds)
+        self.publish_interval = self.get_parameter("publish_interval").get_parameter_value().double_value
+        print(f"DEBUG: publish_interval = {self.publish_interval}s")
 
         # ============================================================
         # STEP 3: Create Output Directory
@@ -177,9 +198,22 @@ class YoloDetectorNode(Node):
         print(f"DEBUG: Tracking system initialized (IoU threshold: {self.iou_threshold_tracking})")
         print(f"DEBUG: Placement detection enabled: variance_threshold={self.variance_threshold}px, destabilize_threshold={self.destabilize_threshold}px")
 
-        # Publisher for detection results (vision_msgs/Detection2DArray)
-        self.pub = self.create_publisher(Detection2DArray, self.detections_topic, 10)
-        print(f"DEBUG: Publisher created on topic: {self.detections_topic}")
+        # Class ID to name mapping (0=glass, 1=metal, 2=paper, 3=plastic)
+        self.class_id_map = {
+            0: "glass",
+            1: "metal",
+            2: "paper/cardboard",
+            3: "plastic"
+        }
+        print("DEBUG: Class mapping: 0=glass, 1=metal, 2=paper/cardboard, 3=plastic")
+        
+        # Publisher for class ID (std_msgs/Int32)
+        self.pub = self.create_publisher(Int32, self.detections_topic, 10)
+        print(f"DEBUG: Publisher created on topic: {self.detections_topic} (Int32 messages)")
+        
+        # Track last published object info to implement publishing interval
+        # Format: {track_id: (class_id, last_publish_time)}
+        self.last_published_objects = {}
         
         # Subscriber for camera frames (sensor_msgs/Image)
         self.sub = self.create_subscription(Image, self.image_topic, self.image_cb, 10)
@@ -193,9 +227,13 @@ class YoloDetectorNode(Node):
         print("="*80)
         self.get_logger().info("YOLO PLACEMENT DETECTOR node started.")
         self.get_logger().info(f"Subscribing: {self.image_topic}")
-        self.get_logger().info(f"Publishing:  {self.detections_topic}")
+        self.get_logger().info(f"Publishing:  {self.detections_topic} (Int32: 0=glass, 1=metal, 2=paper, 3=plastic)")
         self.get_logger().info(f"Model:       {self.model_path}")
         self.get_logger().info(f"Processing:  Every {self.every_n_frames} frames (~{30/self.every_n_frames:.0f} FPS)")
+        self.get_logger().info(f"Keep largest only: {self.keep_largest_only}")
+        self.get_logger().info(f"Save results: {self.save_results}")
+        self.get_logger().info(f"Debug prints: {self.debug_prints}")
+        self.get_logger().info(f"Publish interval: {self.publish_interval}s")
         self.get_logger().info(f"Crop ratio:  {self.crop_ratio} (1/5 from each side)")
         self.get_logger().info(f"Max bbox:    {self.max_bbox_ratio} (filtering larger)")
         self.get_logger().info(f"Placement detection: {self.stable_frames_required} stable detections (~{self.stable_frames_required * self.every_n_frames / 30:.1f}s)")
@@ -246,6 +284,42 @@ class YoloDetectorNode(Node):
         if union_area == 0:
             return 0.0
         return inter_area / union_area
+
+    def debug_print(self, message):
+        """
+        Conditional debug print based on debug_prints flag.
+        
+        Args:
+            message: str message to print
+        """
+        if self.debug_prints:
+            print(f"DEBUG: {message}")
+
+    def keep_largest_detection(self, detections):
+        """
+        Filter detections to keep only the largest one by area.
+        
+        Args:
+            detections: list of (xc, yc, w, h, conf, cls_id) tuples
+            
+        Returns:
+            list: original detections list if keep_largest_only is False,
+                  or single-element list with largest detection if True
+        """
+        if not self.keep_largest_only or len(detections) <= 1:
+            return detections
+        
+        # Find detection with maximum area
+        largest_idx = 0
+        largest_area = detections[0][2] * detections[0][3]  # w * h
+        
+        for i, (xc, yc, w, h, conf, cls_id) in enumerate(detections):
+            area = w * h
+            if area > largest_area:
+                largest_area = area
+                largest_idx = i
+        
+        return [detections[largest_idx]]
 
     def match_detection_to_track(self, bbox, class_id):
         """
@@ -329,9 +403,6 @@ class YoloDetectorNode(Node):
         variance = self.compute_bbox_variance(track_id)
         is_stable = variance < self.variance_threshold
         
-        if not is_stable:
-            print(f"DEBUG: Track #{track_id} has high variance ({variance:.1f}px) - still moving/twitching")
-        
         return is_stable
 
     def has_object_destabilized(self, track_id, current_bbox):
@@ -364,9 +435,6 @@ class YoloDetectorNode(Node):
         
         has_moved = distance >= self.destabilize_threshold or size_change >= self.destabilize_threshold
         
-        if has_moved:
-            print(f"DEBUG: Track #{track_id} DESTABILIZED: distance={distance:.1f}px, size_change={size_change:.1f}px (threshold={self.destabilize_threshold}px)")
-        
         return has_moved
 
     def image_cb(self, msg: Image):
@@ -392,32 +460,20 @@ class YoloDetectorNode(Node):
         # STEP 1: Frame Counter and Logging
         # ============================================================
         self.frame_count += 1
-        self.get_logger().info(f">>> Frame #{self.frame_count} received")
-        print(f"\nDEBUG: [Frame {self.frame_count}] Callback triggered")
-        print(f"DEBUG: Image encoding: {msg.encoding}")
-        print(f"DEBUG: Image dimensions: {msg.width}x{msg.height}")
 
         # ============================================================
         # STEP 2: Frame Skipping Logic
         # ============================================================
         # Only process every N-th frame to reduce computational load
         if self.frame_count % int(self.every_n_frames) != 0:
-            skip_reason = f"Skipping frame (processing every {self.every_n_frames} frames)"
-            print(f"DEBUG: {skip_reason}")
             return
-        
-        print(f"DEBUG: ✓ Processing this frame (frame % {self.every_n_frames} == 0)")
-        print("-" * 60)
 
         # ============================================================
         # STEP 3: Convert ROS Image to OpenCV Format
         # ============================================================
-        print("DEBUG: Converting ROS Image message to OpenCV BGR format...")
         try:
             frame_bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-            print(f"DEBUG: ✓ Conversion successful, shape: {frame_bgr.shape}")
         except Exception as e:
-            print(f"DEBUG: ✗ Conversion FAILED: {e}")
             self.get_logger().error(f"cv_bridge conversion failed: {e}")
             return
 
@@ -435,17 +491,10 @@ class YoloDetectorNode(Node):
         # Crop to center region
         cropped_frame = frame_bgr[crop_h:h-crop_h, crop_w:w-crop_w]
         crop_h_new, crop_w_new = cropped_frame.shape[:2]
-        
-        print(f"DEBUG: Cropped image from {w}x{h} to {crop_w_new}x{crop_h_new}")
-        print(f"DEBUG: Removed {crop_w}px from left/right, {crop_h}px from top/bottom")
-        print("-" * 60)
 
         # ============================================================
         # STEP 5: Run YOLO Inference on Cropped Image
         # ============================================================
-        print("DEBUG: Starting YOLO inference on cropped image...")
-        inference_start = time.time()
-        
         try:
             results_list = self.model.predict(
                 source=cropped_frame,
@@ -453,30 +502,21 @@ class YoloDetectorNode(Node):
                 iou=float(self.iou_thres),
                 verbose=False
             )
-            inference_time = time.time() - inference_start
-            print(f"DEBUG: ✓ Inference completed in {inference_time:.3f} seconds")
             
             if not results_list:
-                print("DEBUG: ✗ No results returned from YOLO model")
                 return
             
             r0 = results_list[0]
-            print(f"DEBUG: Raw detections from YOLO: {len(r0.boxes) if r0.boxes is not None else 0}")
             
         except Exception as e:
-            print(f"DEBUG: ✗ YOLO inference FAILED: {e}")
             self.get_logger().error(f"YOLO inference failed: {e}")
             return
 
         # ============================================================
         # STEP 6: Filter Large Bounding Boxes
         # ============================================================
-        print("-" * 60)
-        print("DEBUG: Filtering large bounding boxes...")
-        
         boxes = r0.boxes
         if boxes is None or len(boxes) == 0:
-            print("DEBUG: No detections in this frame")
             return
 
         # Extract detection data
@@ -495,29 +535,23 @@ class YoloDetectorNode(Node):
             bbox_ratio = bbox_area / cropped_area
             
             if bbox_area > max_bbox_area:
-                print(f"DEBUG: ✗ FILTERED OUT detection #{i+1}:")
-                print(f"DEBUG:   Class: {cls_id}, Conf: {conf:.3f}")
-                print(f"DEBUG:   BBox: ({xc:.1f}, {yc:.1f}, {w:.1f}x{h:.1f})")
-                print(f"DEBUG:   Area: {bbox_area:.1f} ({bbox_ratio*100:.1f}% of image)")
-                print(f"DEBUG:   Reason: Exceeds {self.max_bbox_ratio*100}% threshold")
                 self.get_logger().warn(f"Filtered large bbox: {bbox_ratio*100:.1f}% of image (cls={cls_id})")
                 continue
             
             filtered_detections.append((xc, yc, w, h, conf, cls_id))
-            print(f"DEBUG: ✓ Kept detection #{i+1}: cls={cls_id}, conf={conf:.3f}, area={bbox_ratio*100:.1f}%")
-        
-        print(f"DEBUG: Kept {len(filtered_detections)}/{len(xywh)} detections after filtering")
         
         if len(filtered_detections) == 0:
-            print("DEBUG: All detections were filtered out")
             return
+        
+        # ============================================================
+        # STEP 6b: Keep Only Largest Detection (if enabled)
+        # ============================================================
+        if self.keep_largest_only:
+            filtered_detections = self.keep_largest_detection(filtered_detections)
 
         # ============================================================
         # STEP 7: Match Detections to Tracks
         # ============================================================
-        print("-" * 60)
-        print("DEBUG: Matching detections to existing tracks...")
-        
         matched_tracks = set()
         new_detections = []
         
@@ -529,14 +563,12 @@ class YoloDetectorNode(Node):
             
             if track_id is not None:
                 # Matched to existing track
-                print(f"DEBUG: ✓ Matched detection (cls={cls_id}) to track #{track_id}")
                 self.detection_tracks[track_id].append((self.frame_count, bbox, cls_id, conf))
                 matched_tracks.add(track_id)
             else:
                 # No match, create new track
                 new_track_id = self.next_object_id
                 self.next_object_id += 1
-                print(f"DEBUG: ✓ Created new track #{new_track_id} for detection (cls={cls_id})")
                 self.detection_tracks[new_track_id].append((self.frame_count, bbox, cls_id, conf))
                 matched_tracks.add(new_track_id)
 
@@ -549,22 +581,16 @@ class YoloDetectorNode(Node):
                     tracks_to_remove.append(track_id)
         
         for track_id in tracks_to_remove:
-            print(f"DEBUG: Removing stale track #{track_id}")
             del self.detection_tracks[track_id]
             # Also remove from state tracking
             if track_id in self.object_states:
                 del self.object_states[track_id]
-                print(f"DEBUG: Cleared state for track #{track_id}")
             if track_id in self.last_stable_bbox:
                 del self.last_stable_bbox[track_id]
-                print(f"DEBUG: Cleared stable bbox for track #{track_id}")
 
         # ============================================================
         # STEP 8: Placement Detection State Machine
         # ============================================================
-        print("-" * 60)
-        print("DEBUG: Running placement detection state machine...")
-        
         tracks_to_publish = []
         
         for track_id in matched_tracks:
@@ -574,127 +600,110 @@ class YoloDetectorNode(Node):
             # Initialize state if new track
             if track_id not in self.object_states:
                 self.object_states[track_id] = "DETECTING"
-                print(f"DEBUG: Track #{track_id} initialized in DETECTING state")
             
             current_state = self.object_states[track_id]
-            print(f"DEBUG: Track #{track_id} current state: {current_state}")
             
             # --- STATE: DETECTING ---
             if current_state == "DETECTING":
                 # Check if object has stabilized
                 if self.is_track_stable(track_id):
-                    variance = self.compute_bbox_variance(track_id)
-                    print(f"DEBUG: ✓ Track #{track_id} became STABLE! (variance={variance:.1f}px < {self.variance_threshold}px)")
-                    print(f"DEBUG: ✓ Object placed successfully - publishing detection!")
-                    
                     # Transition to STABLE state
                     self.object_states[track_id] = "STABLE"
                     self.last_stable_bbox[track_id] = bbox
                     
                     # Publish this placement detection
                     tracks_to_publish.append(track_id)
-                else:
-                    track_len = len(track_history)
-                    frames_needed = self.stable_frames_required - track_len
-                    print(f"DEBUG: Track #{track_id} still detecting ({track_len}/{self.stable_frames_required}, need {frames_needed} more or lower variance)")
             
             # --- STATE: STABLE ---
             elif current_state == "STABLE":
                 # Check if object has been moved/destabilized
                 if self.has_object_destabilized(track_id, bbox):
-                    print(f"DEBUG: ✓ Track #{track_id} has been moved - transitioning to DESTABILIZED")
                     self.object_states[track_id] = "DESTABILIZED"
                     # Clear track history to start fresh detection
                     self.detection_tracks[track_id].clear()
-                else:
-                    print(f"DEBUG: Track #{track_id} remains STABLE (not publishing - already reported)")
+                    # Remove from published objects (stop publishing)
+                    if track_id in self.last_published_objects:
+                        cls_id, _ = self.last_published_objects[track_id]
+                        class_name = self.class_id_map.get(cls_id, "unknown")
+                        del self.last_published_objects[track_id]
+                        print(f"[STOP PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id} (object moved)")
+                        self.get_logger().info(f"[STOP PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id} (object moved)")
             
             # --- STATE: DESTABILIZED ---
             elif current_state == "DESTABILIZED":
                 # Start detecting again
-                print(f"DEBUG: Track #{track_id} in DESTABILIZED state - resetting to DETECTING")
                 self.object_states[track_id] = "DETECTING"
                 # History was already cleared when it destabilized
-        
-        print(f"DEBUG: {len(tracks_to_publish)} new placements detected")
 
         # ============================================================
-        # STEP 9: Build Detection Message (Only Newly Placed Objects)
+        # STEP 9: Build and Publish Detection Messages
         # ============================================================
-        if len(tracks_to_publish) == 0:
-            print("DEBUG: No new placements detected - nothing to publish")
-            return
         
-        print("-" * 60)
-        print("DEBUG: Building Detection2DArray message for newly placed objects...")
-        
-        det_array = Detection2DArray()
-        det_array.header = msg.header
-
+        # ============================================================
+        # STEP 9a: Publish for Newly Detected Objects (state: DETECTING -> STABLE)
+        # ============================================================
         for track_id in tracks_to_publish:
             track_history = self.detection_tracks[track_id]
-            
-            # Use most recent detection from this track
             frame_num, bbox, cls_id, conf = track_history[-1]
-            xc, yc, w, h = bbox
             
-            # Adjust coordinates back to original (uncropped) image space
-            xc_original = xc + self.crop_offset_x
-            yc_original = yc + self.crop_offset_y
+            class_name = self.class_id_map.get(cls_id, "unknown")
             
-            print(f"DEBUG: Adding track #{track_id} to message:")
-            print(f"DEBUG:   Class: {cls_id}, Confidence: {conf:.3f}")
-            print(f"DEBUG:   Cropped coords: ({xc:.1f}, {yc:.1f}, {w:.1f}x{h:.1f})")
-            print(f"DEBUG:   Original coords: ({xc_original:.1f}, {yc_original:.1f}, {w:.1f}x{h:.1f})")
+            # Store in published objects tracking
+            self.last_published_objects[track_id] = (cls_id, time.time())
             
-            # Create Detection2D message
-            det = Detection2D()
-            det.header = msg.header
-
-            # Create BoundingBox2D with original image coordinates
-            bbox_msg = BoundingBox2D()
-            
-            # Pose2D has a position field (Point2D) with x, y
-            bbox_msg.center.position.x = float(xc_original)
-            bbox_msg.center.position.y = float(yc_original)
-            bbox_msg.center.theta = 0.0  # No rotation
-            
-            bbox_msg.size_x = float(w)
-            bbox_msg.size_y = float(h)
-            det.bbox = bbox_msg
-
-            # Create ObjectHypothesisWithPose
-            hyp = ObjectHypothesisWithPose()
-            hyp.hypothesis.class_id = str(cls_id)  # class_id is a string
-            hyp.hypothesis.score = float(conf)
-            det.results.append(hyp)
-
-            det_array.detections.append(det)
-
-        # ============================================================
-        # STEP 10: Publish Placement Detections
-        # ============================================================
-        print(f"\nDEBUG: Publishing {len(det_array.detections)} placement detections to {self.detections_topic}")
-        self.pub.publish(det_array)
-        self.get_logger().info(f"✓ Published {len(det_array.detections)} new object placements")
-        print("="*60 + "\n")
+            # Publish Int32 message
+            msg_out = Int32()
+            msg_out.data = int(cls_id)
+            self.pub.publish(msg_out)
+            print(f"[PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id}")
+            self.get_logger().info(f"[PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id}")
         
         # ============================================================
-        # STEP 11: Save Annotated Image (Optional)
+        # STEP 9b: Re-publish for Already Stable Objects (if interval passed)
         # ============================================================
-        try:
-            annotated_bgr = r0.plot()
-            stamp_ns = int(msg.header.stamp.sec) * 1_000_000_000 + int(msg.header.stamp.nanosec)
-            if stamp_ns == 0:
-                stamp_ns = int(time.time() * 1e9)
-            out_path = os.path.join(
-                self.save_dir,
-                f"frame_{self.frame_count:06d}_{stamp_ns}.jpg"
-            )
-            cv2.imwrite(out_path, annotated_bgr)
-            print(f"DEBUG: Saved annotated image: {out_path}")
-        except Exception as e:
-            print(f"DEBUG: Could not save annotated image: {e}")
+        current_time = time.time()
+        tracks_to_republish = []
+        
+        for track_id in self.last_published_objects.keys():
+            if track_id in self.object_states and self.object_states[track_id] == "STABLE":
+                cls_id, last_pub_time = self.last_published_objects[track_id]
+                time_since_pub = current_time - last_pub_time
+                
+                if time_since_pub >= self.publish_interval:
+                    tracks_to_republish.append(track_id)
+        
+        for track_id in tracks_to_republish:
+            cls_id, _ = self.last_published_objects[track_id]
+            
+            # Update publish timestamp
+            self.last_published_objects[track_id] = (cls_id, current_time)
+            
+            # Publish Int32 message
+            msg_out = Int32()
+            msg_out.data = int(cls_id)
+            self.pub.publish(msg_out)
+            
+            class_name = self.class_id_map.get(cls_id, "unknown")
+            print(f"[RE-PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id}")
+            self.get_logger().info(f"[RE-PUBLISH] Int32: {cls_id} ({class_name}) - Track #{track_id}")
+        
+        # ============================================================
+        # STEP 10: Save Annotated Image (if enabled)
+        # ============================================================
+        if self.save_results and len(tracks_to_publish) > 0:
+            try:
+                annotated_bgr = r0.plot()
+                stamp_ns = int(msg.header.stamp.sec) * 1_000_000_000 + int(msg.header.stamp.nanosec)
+                if stamp_ns == 0:
+                    stamp_ns = int(time.time() * 1e9)
+                out_path = os.path.join(
+                    self.save_dir,
+                    f"frame_{self.frame_count:06d}_{stamp_ns}.jpg"
+                )
+                cv2.imwrite(out_path, annotated_bgr)
+                self.get_logger().info(f"✓ Saved annotated image: {out_path}")
+            except Exception as e:
+                self.get_logger().error(f"Could not save annotated image: {e}")
 
 
 

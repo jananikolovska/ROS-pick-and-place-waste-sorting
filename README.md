@@ -82,15 +82,24 @@ Currently operates with a **dummy message sender** for testing. Integration with
 
 ### YOLO Detector Integration (yolo_detector_ros2)
 
-A **non-Accelerator based inference node** has been added for initial testing purposes using the **Phase 1 YOLOv8s model weights**. This node allows testing the perception pipeline independently before accelerator deployment. Needs refinements: both the finetunning, and the node to match the flow of the other nodes
+The YOLO detector (non-accelerated, CPU/GPU only) is now part of the integrated ROS flow and is working as a core perception component. It currently runs with a video fake stream (provided by the video stream helper node) and publishes detection results for downstream robotic manipulation.
+
+For more details, see the dedicated [README in ros_ws/src/yolo_detector_ros2](ros_ws/src/yolo_detector_ros2/README.md).
+
+![YOLO detection example](imgs/yolo_results.png)
 
 ### 🟢 Current Status
 
 - ✅ **Helper nodes** (camera, display, video stream, save annotated) — **running**  
-- ✅ **YOLO ** (phase 1 inference) — **finetunned, needs phase 2**  
+- ✅ **YOLO detector** (phase 1 inference) — **integrated and working**  
 - ✅ **Robotic simulation with dummy message sender** — **fully operational**  
-- 🔄 **YOLO-to-manipulation integration** — **in progress** (detector and simulator tested separately)
+- 🔄 **YOLO-to-manipulation integration** — **tested together**
 
 ---
 
 More updates coming soon 🚀
+---
+
+## TODO
+
+- Implement an accelerator-based inference node (Axelera) with the same interface and flow as the current YOLO detector node.

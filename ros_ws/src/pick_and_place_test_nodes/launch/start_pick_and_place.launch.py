@@ -14,6 +14,13 @@ from launch.substitutions import Command, FindExecutable, LaunchConfiguration, P
 
 def generate_launch_description():
 
+  # Declare launch argument for detections topic
+  detections_topic_arg = DeclareLaunchArgument(
+      "detections_topic",
+      default_value="/detections",
+      description="Topic to subscribe for detection results (Int32 class IDs from YOLO detector)"
+  )
+
   robot_description_content = Command(
       [
           PathJoinSubstitution([FindExecutable(name="xacro")]),
@@ -53,8 +60,9 @@ def generate_launch_description():
           robot_description,
           robot_description_semantic,
           robot_description_kinematics,
-          {"use_sim_time": True}
+          {"use_sim_time": True},
+          {"detections_topic": LaunchConfiguration("detections_topic")}
       ],
   )
 
-  return LaunchDescription([move_group_demo])
+  return LaunchDescription([detections_topic_arg, move_group_demo])

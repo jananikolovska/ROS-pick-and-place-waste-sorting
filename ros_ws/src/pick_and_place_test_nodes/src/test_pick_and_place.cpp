@@ -14,6 +14,20 @@
 #include <atomic>
 #include <thread>
 
+// Pick and Place Node with YOLO Detector Integration
+// ====================================================
+// This node subscribes to Int32 messages from the YOLO detector containing
+// detected object class IDs and performs corresponding pick-and-place operations.
+//
+// Topic: /detections (configurable via launch parameter)
+// Message Type: std_msgs::msg::Int32
+//
+// Class ID Mapping (from YOLO detector):
+//   0 = glass   -> Place in green bin (60°)
+//   1 = metal   -> Place in green bin (60°)
+//   2 = paper   -> Place in red bin (120°)
+//   3 = plastic -> Place in yellow bin (-60°)
+
 using namespace std::chrono_literals;
 
 bool perform_pick_and_place_cycle(
@@ -24,8 +38,12 @@ bool perform_pick_and_place_cycle(
 {
   auto const logger = node->get_logger();
   
-  // Determine color and position based on message value
-  // 0, 1 -> green (60°), 2 -> red (120°), 3 -> yellow (-60°)
+  // Determine color and position based on YOLO detection class ID
+  // Class mapping (matches YOLO detector):
+  //   0 = glass   -> green bin at 60°
+  //   1 = metal   -> green bin at 60°
+  //   2 = paper   -> red bin at 120°
+  //   3 = plastic -> yellow bin at -60°
   std::string color;
   std::string model_color;
   double place_joint_angle;
@@ -213,7 +231,11 @@ int main(int argc, char* argv[])
 
   auto const logger = node->get_logger();
 
-  RCLCPP_INFO(logger, "Pick and place node started. Waiting for random numbers...");
+  // Declare and get the detection topic parameter
+  node->declare_parameter("detections_topic", "/detections");
+  std::string detections_topic = node->get_parameter("detections_topic").as_string();
+  
+  RCLCPP_INFO(logger, "Pick and place node started. Waiting for detections on topic: %s", detections_topic.c_str());
 
   using moveit::planning_interface::MoveGroupInterface;
   auto move_group_interface = MoveGroupInterface(node, "arm_group");
@@ -222,9 +244,9 @@ int main(int argc, char* argv[])
   std::atomic<bool> is_processing(false);
   std::atomic<int> cycle_counter(0);
 
-  // Subscribe to random_number topic
+  // Subscribe to detections topic (Int32 messages from YOLO detector)
   auto subscription = node->create_subscription<std_msgs::msg::Int32>(
-    "random_number",
+    detections_topic,
     10,
     [&](const std_msgs::msg::Int32::SharedPtr msg) {
       // Check if already processing
@@ -237,7 +259,7 @@ int main(int argc, char* argv[])
       cycle_counter++;
       int current_cycle = cycle_counter.load();
       
-      RCLCPP_INFO(logger, "Received message: %d - Starting pick and place cycle %d", msg->data, current_cycle);
+      RCLCPP_INFO(logger, "Received detection class ID: %d - Starting pick and place cycle %d", msg->data, current_cycle);
       
       // Spawn a separate thread to handle the pick and place cycle
       std::thread pick_place_thread([&, current_cycle, msg]() {
