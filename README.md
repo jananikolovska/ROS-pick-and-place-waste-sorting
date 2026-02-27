@@ -66,19 +66,30 @@ This phase establishes a clean baseline before moving into optimization, data ba
 
 ### Robot Manipulation Simulation (ros_ws)
 
-The robotic hand simulation code is currently **in progress** and **under testing**. The initial implementation has been inspired and modified from the [santoshbalaji/pick_and_place](https://github.com/santoshbalaji/pick_and_place) repository.
+This module provides a **message-driven robotic manipulation system** that orchestrates the complete pick-and-place workflow. The simulation implements:
+
+- **Motion Planning**: MoveIt2-based joint space and Cartesian planning with collision avoidance
+- **Threaded Execution**: Asynchronous pick-and-place cycles preventing blocking of the ROS 2 executor
+- **Dynamic Object Management**: Boxes are spawned, manipulated, and deleted per cycle
+- **Color-Based Sorting**: Three drop-off zones (green, red, yellow) based on box classification
+- **Message-Driven Pipeline**: Subscribes to external number messages (0-3) triggering complete manipulation cycles
+
+Currently operates with a **dummy message sender** for testing. Integration with YOLO detector responses is in progress; detector outputs have been tested independently but full pipeline coupling is under development.
+
+![Gazebo robotic arm manipulation flow](imgs/gazebo_arm_flow.gif)
+
+**Credits**: This module was cloned from and adjusted after [santoshbalaji/pick_and_place](https://github.com/santoshbalaji/pick_and_place).
 
 ### YOLO Detector Integration (yolo_detector_ros2)
 
-A **non-Accelerator based inference node** has been added for initial testing purposes using the **Phase 1 YOLOv8s model weights**. This node allows testing the perception pipeline independently before accelerator deployment.
+A **non-Accelerator based inference node** has been added for initial testing purposes using the **Phase 1 YOLOv8s model weights**. This node allows testing the perception pipeline independently before accelerator deployment. Needs refinements: both the finetunning, and the node to match the flow of the other nodes
 
 ### 🟢 Current Status
 
 - ✅ **Helper nodes** (camera, display, video stream, save annotated) — **running**  
-- ✅ **YOLO detector node** (phase 1 inference) — **running**  
-- ✅ **Dummy simulation** with 2 test values — **working independently** from detection pipeline  
-
-The system components are currently running and validated separately. Integration between the perception pipeline (detection) and the manipulation pipeline (simulation) is in ongoing development.
+- ✅ **YOLO ** (phase 1 inference) — **finetunned, needs phase 2**  
+- ✅ **Robotic simulation with dummy message sender** — **fully operational**  
+- 🔄 **YOLO-to-manipulation integration** — **in progress** (detector and simulator tested separately)
 
 ---
 

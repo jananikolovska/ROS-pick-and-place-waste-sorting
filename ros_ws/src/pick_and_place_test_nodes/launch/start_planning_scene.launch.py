@@ -44,10 +44,9 @@ def generate_launch_description():
   robot_description_kinematics = PathJoinSubstitution(
       [FindPackageShare('pick_and_place_moveit_config'), "config", "kinematics.yaml"]
   )
-  
-  vision_based_pick_and_place_node = Node(
+  move_group_demo = Node(
       package="pick_and_place_test_nodes",
-      executable="vision_based_pick_and_place",
+      executable="test_add_virtual_obstacles",
       output="screen",
       parameters=[
           robot_description,
@@ -57,4 +56,4 @@ def generate_launch_description():
       ],
   )
 
-  return LaunchDescription([vision_based_pick_and_place_node])
+  return LaunchDescription([move_group_demo])

@@ -16,6 +16,7 @@ if(NOT WIN32)
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
@@ -64,41 +65,19 @@ add_executable(test_pick_and_place src/test_pick_and_place.cpp)
 
 ament_target_dependencies(test_pick_and_place
   rclcpp
-  std_srvs
-  moveit_core
-  moveit_ros_planning_interface
-)
-
-add_executable(test_pick_and_place_two_objects src/test_pick_and_place_two_objects.cpp)
-
-ament_target_dependencies(test_pick_and_place_two_objects
-  rclcpp
-  std_srvs
-  geometry_msgs
-  gazebo_msgs
-  moveit_core
-  moveit_ros_planning_interface
-)
-
-add_executable(fake_camera_detector src/fake_camera_detector.cpp)
-
-ament_target_dependencies(fake_camera_detector
-  rclcpp
-  std_msgs
-  geometry_msgs
-  gazebo_msgs
-)
-
-add_executable(vision_based_pick_and_place src/vision_based_pick_and_place.cpp)
-
-ament_target_dependencies(vision_based_pick_and_place
-  rclcpp
   std_msgs
   std_srvs
-  geometry_msgs
   gazebo_msgs
+  ament_index_cpp
   moveit_core
   moveit_ros_planning_interface
+)
+
+add_executable(random_number_publisher src/random_number_publisher.cpp)
+
+ament_target_dependencies(random_number_publisher
+  rclcpp
+  std_msgs
 )
 
 
@@ -112,7 +91,7 @@ endif()
 ## Install
 install(
   TARGETS
-    test_sending_trajectory test_send_joint_space_goal test_send_cartesian_goal test_add_virtual_obstacles test_pick_and_place test_pick_and_place_two_objects fake_camera_detector vision_based_pick_and_place
+    test_sending_trajectory test_send_joint_space_goal test_send_cartesian_goal test_add_virtual_obstacles test_pick_and_place random_number_publisher
   DESTINATION
     lib/${PROJECT_NAME}
 )

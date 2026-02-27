@@ -65,6 +65,95 @@
         <kinematic>0</kinematic>
       </link>
     </model>
+    
+    <!-- Pink marker for spawn/pickup location -->
+    <model name='marker_spawn'>
+      <static>1</static>
+      <link name='link'>
+        <visual name='visual'>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>0.3 0.3</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>1 0.75 0.8 1</ambient>
+            <diffuse>1 0.75 0.8 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+      <pose>-0.03 0.54 0.001 0 0 0</pose>
+    </model>
+
+    <!-- Green marker for drop-off (0,1) at 60° right -->
+    <model name='marker_green'>
+      <static>1</static>
+      <link name='link'>
+        <visual name='visual'>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>0.3 0.3</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0 1 0 0.7</ambient>
+            <diffuse>0 1 0 0.7</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+      <pose>-0.468 0.27 0.001 0 0 0</pose>
+    </model>
+
+    <!-- Red marker for drop-off (2) at 120° right -->
+    <model name='marker_red'>
+      <static>1</static>
+      <link name='link'>
+        <visual name='visual'>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>0.3 0.3</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>1 0 0 0.7</ambient>
+            <diffuse>1 0 0 0.7</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+      <pose>-0.468 -0.27 0.001 0 0 0</pose>
+    </model>
+
+    <!-- Yellow marker for drop-off (3) at -60° left -->
+    <model name='marker_yellow'>
+      <static>1</static>
+      <link name='link'>
+        <visual name='visual'>
+          <pose>0 0 0 0 0 0</pose>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>0.3 0.3</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>1 1 0 0.7</ambient>
+            <diffuse>1 1 0 0.7</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+      </link>
+      <pose>0.468 0.27 0.001 0 0 0</pose>
+    </model>
+
     <gravity>0 0 -9.8</gravity>
     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
