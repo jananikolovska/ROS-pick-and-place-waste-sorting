@@ -29,12 +29,14 @@ Full system sketch (handmade 👈 and prompted with a generative AI model 👉)
 ![Full system sketch](imgs/full_system.png)
 
 ---
-### 📦 Dataset  
+### 📦 Datasets  
 
 🔗 **[Garbage Detection Dataset (Kaggle)](https://www.kaggle.com/datasets/viswaprakash1990/garbage-detection)**  
 
-For the tunning of the Yolo networks, this project uses a publicly available garbage detection dataset from Kaggle, containing annotated images across multiple waste categories.  
-It provides bounding box labels for real-world waste objects.
+🔗 **[YOLO Waste Detection Dataset — 7 Classes for Smarter Recycling (Kaggle)](https://www.kaggle.com/datasets/engrbasit62/garbage-dataset-plusyaml)**  
+
+For the tunning of the Yolo networks, this project uses a two publicly available garbage detection dataset from Kaggle, containing annotated images across multiple waste categories.  
+It provides bounding box labels for real-world waste objects. In both datasets only a set of classes has been retained.
 
 ![Example Image from Dataset](imgs/dataset_example.png)
 
