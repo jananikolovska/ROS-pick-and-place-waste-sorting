@@ -39,26 +39,20 @@ It provides bounding box labels for real-world waste objects.
 ![Example Image from Dataset](imgs/dataset_example.png)
 
 ### 👀 YOLO Model Exploration
-#### Phase 1 
 
-Phase 1 focuses on fine-tuning and comparing different YOLO models (YOLOv5 and YOLOv8, nano and small variants).  
+#### Phase 1 – Model Comparison
 
-The goal was simple:  
-No hyperparameter tuning, no heavy tricks — just training different model sizes and versions under the same conditions and comparing:
+Compared YOLOv5 and YOLOv8 (nano and small variants) under identical conditions with no hyperparameter tuning.  
+Focused on: speed, model size, mAP, precision/recall.
 
-- Speed  
-- Model size  
-- mAP performance  
-- Precision / Recall  
+**Result:** YOLOv8s achieved best overall performance. Dataset imbalance (especially "Paper" class) was the main limiting factor, not architecture.
 
-### Conclusion (Phase 1)
+#### Phase 2 – Dataset Harmonization
 
-- **YOLOv8s performed best overall**, achieving the highest mAP.  
-- Small variants consistently outperformed nano models.  
-- YOLOv8 showed slightly better generalization than YOLOv5.  
-- Dataset imbalance (especially the “Paper” class) was the main limiting factor, not architecture.  
+Harmonized two YOLO datasets into a clean **4-class taxonomy** (cardboard_paper, glass, metal, plastic).  
+Merged cardboard + paper, removed biodegradable, improved label consistency.
 
-This phase establishes a clean baseline before moving into optimization, data balancing, and deployment on the Axelera accelerator.
+**Result:** Enhanced label quality and class structure significantly improved detector robustness — often more impactful than model scaling alone.
 
 ---
 
