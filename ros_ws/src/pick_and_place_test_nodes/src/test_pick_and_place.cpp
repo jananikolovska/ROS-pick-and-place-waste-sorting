@@ -232,7 +232,10 @@ int main(int argc, char* argv[])
   auto const logger = node->get_logger();
 
   // Declare and get the detection topic parameter
-  node->declare_parameter("detections_topic", "/detections");
+  // If provided via launch parameter overrides, it is already declared.
+  if (!node->has_parameter("detections_topic")) {
+    node->declare_parameter("detections_topic", "/detections");
+  }
   std::string detections_topic = node->get_parameter("detections_topic").as_string();
   
   RCLCPP_INFO(logger, "Pick and place node started. Waiting for detections on topic: %s", detections_topic.c_str());

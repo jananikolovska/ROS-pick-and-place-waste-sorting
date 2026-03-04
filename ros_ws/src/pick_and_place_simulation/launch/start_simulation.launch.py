@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from ament_index_python import get_package_prefix
 
 from launch import LaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import (
     DeclareLaunchArgument,
@@ -30,6 +31,7 @@ def launch_setup(context, *args, **kwargs):
     use_gazebo = LaunchConfiguration("use_gazebo")
     use_ignition = LaunchConfiguration("use_ignition")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
+    use_rviz = LaunchConfiguration("use_rviz")
 
     # xacro command for model generation
     robot_description_content = Command(
@@ -75,7 +77,8 @@ def launch_setup(context, *args, **kwargs):
         name="rviz2",
         output="log",
         arguments=["-d", rviz_config_file],
-        parameters=[{'use_sim_time': True}]
+        parameters=[{'use_sim_time': True}],
+        condition=IfCondition(use_rviz)
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -87,6 +90,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     delay_rviz_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+        condition=IfCondition(use_rviz),
         event_handler=OnProcessExit(
             target_action=joint_state_broadcaster_spawner,
             on_exit=[rviz_node],
@@ -97,14 +101,6 @@ def launch_setup(context, *args, **kwargs):
         package="controller_manager",
         executable="spawner",
         arguments=["joint_trajectory_position_controller", "-c", "/controller_manager"],
-        parameters=[{'use_sim_time': True}]
-    )
-
-    initial_joint_controller_spawner_stopped = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["joint_trajectory_position_controller", "-c",
-                   "/controller_manager", "--stopped"],
         parameters=[{'use_sim_time': True}]
     )
 
@@ -143,7 +139,6 @@ def launch_setup(context, *args, **kwargs):
         robot_state_pub_node,
         joint_state_broadcaster_spawner,
         delay_rviz_after_joint_state_broadcaster_spawner,
-        initial_joint_controller_spawner_stopped,
         initial_joint_controller_spawner_started,
         start_gazebo_server_cmd,
         start_gazebo_client_cmd,
@@ -178,6 +173,14 @@ def generate_launch_description():
             "use_fake_hardware",
             default_value="false",
             description="Switch to enable fake hardware hardware plugin or not",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_rviz",
+            default_value="false",
+            description="Switch to enable RViz visualization or not",
         )
     )
 
