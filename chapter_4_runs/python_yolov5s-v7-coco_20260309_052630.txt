@@ -1,0 +1,17 @@
+======================================================================
+[Python Inference Node]  2026-03-09 05:26:30
+  Model            : yolov5s-v7-coco
+  Frames received  : 3597
+  Frames processed : 3597
+  Frames dropped   : 0  (0.0%)
+  Processed FPS    : 12.68
+  Detections per frame                  0.3 ±    0.5   (rolling last 100 frames)
+  Rolling window   : last 100 frames  |  latency = mean ± std
+----------------------------------------------------------------------
+  Callback queue delay (DDS)         351.24 ±  70.59   p95:   518.20 ms
+  Preprocessing (resize+norm+quant)    20.29 ±   0.82   p95:    21.59 ms
+  AIPU inference                       7.22 ±   0.32   p95:     7.90 ms
+  Dequantization (int8 → float32)      4.23 ±   0.33   p95:     4.75 ms
+  ONNX NMS postprocess                39.60 ±   7.40   p95:    56.07 ms
+  End-to-end (callback → publish)     73.70 ±   8.63   p95:    93.89 ms
+======================================================================
