@@ -4,6 +4,7 @@ from launch.actions import (
     OpaqueFunction,
     RegisterEventHandler,
 )
+from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 
@@ -17,6 +18,8 @@ def launch_setup(context, *args, **kwargs):
     use_gazebo = LaunchConfiguration("use_gazebo")
     use_ignition = LaunchConfiguration("use_ignition")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
+    use_rviz = LaunchConfiguration("use_rviz")
+    spawn_controllers = LaunchConfiguration("spawn_controllers")
 
     # xacro command for model generation
     robot_description_content = Command(
@@ -75,7 +78,8 @@ def launch_setup(context, *args, **kwargs):
         executable="rviz2",
         name="rviz2",
         output="log",
-        arguments=["-d", rviz_config_file]
+        arguments=["-d", rviz_config_file],
+        condition=IfCondition(use_rviz)
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -83,6 +87,7 @@ def launch_setup(context, *args, **kwargs):
         executable="spawner",
         arguments=["joint_state_broadcaster",
                    "--controller-manager", "/controller_manager"],
+        condition=IfCondition(spawn_controllers)
     )
 
     robot_controller_spawner = Node(
@@ -90,16 +95,11 @@ def launch_setup(context, *args, **kwargs):
         executable="spawner",
         arguments=["joint_trajectory_position_controller",
                    "--controller-manager", "/controller_manager"],
-    )
-
-    delay_rviz_after_joint_state_broadcaster_spawner = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=joint_state_broadcaster_spawner,
-            on_exit=[rviz_node],
-        )
+        condition=IfCondition(spawn_controllers)
     )
 
     delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+        condition=IfCondition(spawn_controllers),
         event_handler=OnProcessExit(
             target_action=joint_state_broadcaster_spawner,
             on_exit=[robot_controller_spawner],
@@ -109,8 +109,8 @@ def launch_setup(context, *args, **kwargs):
     nodes_to_start = [
         control_node,
         robot_state_pub_node,
+        rviz_node,
         joint_state_broadcaster_spawner,
-        delay_rviz_after_joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
     ]
 
@@ -141,6 +141,22 @@ def generate_launch_description():
             "use_fake_hardware",
             default_value="true",
             description="Switch to enable fake hardware hardware plugin or not",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_rviz",
+            default_value="false",
+            description="Switch to enable RViz visualization or not",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "spawn_controllers",
+            default_value="false",
+            description="Switch to spawn controllers explicitly when not auto-loaded",
         )
     )
 

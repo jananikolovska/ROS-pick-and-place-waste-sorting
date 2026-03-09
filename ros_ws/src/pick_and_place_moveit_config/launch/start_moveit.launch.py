@@ -4,6 +4,13 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ur_moveit_config.launch_common import load_yaml
 
+
+def _clean_ld_library_path():
+    """Return LD_LIBRARY_PATH with snap paths removed to prevent snap library conflicts."""
+    current = os.environ.get('LD_LIBRARY_PATH', '')
+    paths = [p for p in current.split(':') if '/snap/' not in p]
+    return ':'.join(paths)
+
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
@@ -126,6 +133,7 @@ def launch_setup(context, *args, **kwargs):
         name="rviz2_moveit",
         output="log",
         arguments=["-d", rviz_config_file],
+        additional_env={'LD_LIBRARY_PATH': _clean_ld_library_path()},
         parameters=[
             robot_description,
             robot_description_semantic,
@@ -206,7 +214,7 @@ def generate_launch_description():
     )
 
     declared_arguments.append(
-        DeclareLaunchArgument("launch_rviz", default_value="true", description="Launch RViz?")
+        DeclareLaunchArgument("launch_rviz", default_value="false", description="Launch RViz?")
     )
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

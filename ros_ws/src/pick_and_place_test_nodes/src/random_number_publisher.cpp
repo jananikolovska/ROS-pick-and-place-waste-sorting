@@ -12,7 +12,7 @@ public:
   RandomNumberPublisher()
   : Node("random_number_publisher"), publish_count_(0)
   {
-    publisher_ = this->create_publisher<std_msgs::msg::Int32>("random_number", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Int32>("/detections", 10);
     
     // Setup random number generator
     std::random_device rd;
