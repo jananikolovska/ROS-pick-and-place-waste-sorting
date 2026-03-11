@@ -24,7 +24,6 @@ This repository has been enhanced with a message-driven pick-and-place system:
 - **Multi-Cycle Support**: The system seamlessly handles multiple sequential pick-and-place operations with automatic box cleanup between cycles
 
 ## Usage
-``` ros2 launch pick_and_place_description start_control.launch.py ```
 
 ## To launch the model with test environment in gazebo
 ``` ros2 launch pick_and_place_simulation start_simulation.launch.py ```
@@ -47,7 +46,6 @@ pkill -f moveit
 pkill -f rviz
 pkill -f ros2
 
-conda deactivate
 source install/setup.bash
 ```
 
@@ -75,8 +73,12 @@ This will start the node, which subscribes to camera frames, runs inference, and
 
 Below is a GIF showing the simulation running in Gazebo:
 
-![Gazebo Simulation Flow](../imgs/gazebo_arm_flow.gif)
+<p align="center">
+  <img src="../../imgs/gazebo_arm_flow.gif" alt="Gazebo Simulation Flow" width="600"/>
+</p>
 
 And some sketches illustrating the overall validation system setup:
 
-![Validation System Sketches](../imgs/full_system_sketch.png)
+<p align="center">
+  <img src="../../imgs/full_system.png" alt="Validation System Sketches" width="600"/>
+</p>

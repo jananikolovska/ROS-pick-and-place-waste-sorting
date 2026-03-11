@@ -109,7 +109,9 @@ Improving **label quality and class structure** can significantly enhance detect
 
 Below are examples of the dataset used for training and evaluation, showing the diversity and annotation quality of the waste detection task:
 
-![Dataset Examples](../imgs/dataset_examples.png)
+<p align="center">
+  <img src="../imgs/dataset_example.png" alt="Dataset Examples" width="600"/>
+</p>
 
 ---
 
@@ -117,6 +119,8 @@ Below are examples of the dataset used for training and evaluation, showing the 
 
 The following image shows the detection results after fine-tuning the YOLO model on the harmonized dataset:
 
-![YOLO Results](../imgs/yolo_results.png)
+<p align="center">
+  <img src="../imgs/yolo_results.png" alt="YOLO Results" width="600"/>
+</p>
 
 ---
