@@ -1,4 +1,4 @@
-# � YOLO Model Exploration
+# YOLO Model Exploration
 
 ## Phase 1 – Model Comparison
 
@@ -102,3 +102,21 @@ Measured deltas in precision, recall, and mAP to isolate the impact of taxonomy 
 ### Key Insight
 
 Improving **label quality and class structure** can significantly enhance detector robustness — often more than model scaling alone.
+
+---
+
+### Example Dataset Images
+
+Below are examples of the dataset used for training and evaluation, showing the diversity and annotation quality of the waste detection task:
+
+![Dataset Examples](../imgs/dataset_examples.png)
+
+---
+
+### Results After Fine-Tuning
+
+The following image shows the detection results after fine-tuning the YOLO model on the harmonized dataset:
+
+![YOLO Results](../imgs/yolo_results.png)
+
+---

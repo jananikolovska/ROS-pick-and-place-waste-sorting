@@ -40,6 +40,9 @@ class SaveNode(Node):
         os.makedirs(self.results_dir, exist_ok=True)
         self.frame_count = 0
 
+        self.declare_parameter("debug", False)
+        self.debug = self.get_parameter("debug").get_parameter_value().bool_value
+
     def overlay_logo(self, frame, logo):
         """Overlay RGBA logo on BGR frame (bottom-right)."""
         if logo is None:
@@ -87,7 +90,8 @@ class SaveNode(Node):
             file_path = os.path.join("/home/ubuntu/voyager-sdk/ros2_ws/results", f"frame_{self.frame_count:06d}.png")
             
             cv2.imwrite(file_path, frame)
-            self.get_logger().info(f"Saved frame to {file_path}")
+            if self.debug:
+                self.get_logger().info(f"Saved frame to {file_path}")
             self.frame_count += 1
         except Exception as e:
             self.get_logger().error(f"Save error: {e}")

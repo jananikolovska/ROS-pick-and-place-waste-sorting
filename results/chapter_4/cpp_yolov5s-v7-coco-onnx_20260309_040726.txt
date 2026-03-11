@@ -1,0 +1,17 @@
+======================================================================
+[C++ Inference Node]  2026-03-09 04:07:26
+  Model            : yolov5s-v7-coco-onnx
+  Frames received  : 6562
+  Frames processed : 6562
+  Frames dropped   : 0  (0.0%)
+  Processed FPS    : 21.96
+  Detections per frame                   1.4 ±    1.1   (rolling last 100 frames)
+  Rolling window   : last 100 frames  |  latency = mean ± std
+----------------------------------------------------------------------
+  Callback queue delay (DDS)          326.81 ±  19.22   p95:   362.74 ms
+  Preprocessing (resize+norm+quant)     6.32 ±   0.59   p95:     7.05 ms
+  AIPU inference                       12.75 ±   0.49   p95:    13.68 ms
+  Dequantization (int8 → float32)    11.22 ±   1.50   p95:    13.96 ms
+  ONNX NMS postprocess                 13.67 ±   1.47   p95:    16.15 ms
+  End-to-end (callback → publish)    45.02 ±   2.62   p95:    50.06 ms
+======================================================================

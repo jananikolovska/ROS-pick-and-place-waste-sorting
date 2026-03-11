@@ -7,7 +7,7 @@ This is a ROS 2 project that demonstrates an autonomous robotic pick-and-place s
 
 The system is fully event-driven and message-based, making it easy to integrate with higher-level planning or perception systems. All pick-and-place operations are performed automatically in separate threads to ensure non-blocking execution.
 
-## Summary of Key Changes
+## Summary of Key Implementations and Flow
 
 This repository has been enhanced with a message-driven pick-and-place system:
 
@@ -50,3 +50,33 @@ pkill -f ros2
 conda deactivate
 source install/setup.bash
 ```
+
+## Perception and Inference Node (recycle_inference_node_cpp)
+
+The perception pipeline uses a custom YOLO-based neural network, fine-tuned and exported in the `yolo_training` folder, and compiled/deployed for the Axelera AI M.2 accelerator. The `recycle_inference_node_cpp` node runs inference on the accelerator and publishes the detected class (glass, metal, paper, plastic) to a ROS 2 topic.
+
+### Logic and Integration
+- When the `recycle_inference_node_cpp` node receives a new detection message, it triggers the pick-and-place arm to execute a pick-and-place cycle for the detected object.
+- The node implements a stability check: detections must be stable for a configurable number of frames (default: 10) before being published. If the detection becomes unstable (e.g., object moves or is occluded), a destabilization threshold resets the stability counter, ensuring only reliable detections trigger the robot.
+- The node is highly configurable, with parameters for thresholds, topics, and more.
+
+### How to Run
+To launch the inference node with the Axelera AI accelerator:
+```bash
+ros2 launch recycle_inference_node_cpp inference_launch.py
+```
+This will start the node, which subscribes to camera frames, runs inference, and publishes detection results. When a stable detection is made, the arm is triggered to pick and place the detected object in the appropriate zone.
+
+- The model and inference pipeline are fully customizable in the `yolo_training` directory.
+- Ensure the Axelera AI M.2 accelerator is installed and configured on your system.
+- The node requires Axelera's Voyager SDK 1.4 to be installed for proper operation.
+
+## System Visualization
+
+Below is a GIF showing the simulation running in Gazebo:
+
+![Gazebo Simulation Flow](../imgs/gazebo_arm_flow.gif)
+
+And some sketches illustrating the overall validation system setup:
+
+![Validation System Sketches](../imgs/full_system_sketch.png)

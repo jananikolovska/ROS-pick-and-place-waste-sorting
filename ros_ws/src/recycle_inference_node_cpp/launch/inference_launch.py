@@ -1,11 +1,19 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
-from launch import LaunchDescription
-from launch_ros.actions import Node
 
 def generate_launch_description():
+    compute_metrics_arg = DeclareLaunchArgument(
+        'compute_metrics',
+        default_value='true',
+        description='Enable performance metrics (latency, FPS, counters). Printed every 5 s and on shutdown.'
+    )
+
     return LaunchDescription([
+        compute_metrics_arg,
         Node(
             package='recycle_inference_node_cpp',
             executable='inference_cpp',
@@ -31,35 +39,36 @@ def generate_launch_description():
                     'publish_class_id': True,          # toggle /detections (Int32)
 
                     # --- Model output format ---
-                    # num_classes is auto-derived from model_info.json labels at startup;
-                    # the value set here is overridden and kept only as a fallback default.
-                    'num_classes': 4,          # recycling model: glass/metal/paper/plastic (overridden by label count)
-                    'has_objectness': False,    # True = YOLOv5 (shape [..., num_classes+5]), False = YOLOv8 (shape [..., num_classes+4, ...])
+                    'num_classes': 4,
+                    'has_objectness': False,
 
                     # --- Inference thresholds ---
                     'confidence_threshold': 0.10,
                     'nms_threshold': 0.45,
 
                     # --- Frame processing ---
-                    'every_n_frames': 5,        # process every N-th frame
-                    'crop_ratio': 0.2,          # fraction to crop from each side
+                    'every_n_frames': 5,
+                    'crop_ratio': 0.2,
 
                     # --- Detection filtering ---
-                    'max_bbox_ratio': 0.9,      # discard boxes larger than this fraction of the image
-                    'keep_largest_only': True,  # keep only the biggest detection per frame
+                    'max_bbox_ratio': 0.9,
+                    'keep_largest_only': True,
 
                     # --- Stable placement detection ---
-                    'stable_frames_required': 10,   # consecutive detections needed to call it stable
-                    'variance_threshold': 15.0,     # max centre-position std-dev (px) to count as stable
-                    'destabilize_threshold': 50.0,  # centre movement (px) that resets tracking
+                    'stable_frames_required': 10,
+                    'variance_threshold': 30.0,
+                    'destabilize_threshold': 50.0,
+                    'false_detection_frames': 10,
 
                     # --- Publishing ---
-                    'publish_interval': 0.25,   # seconds between re-publishes while object is stable
+                    'publish_interval': 0.25,
 
                     # --- Output ---
                     'save_results': True,
                     'save_dir': 'yolo_results',
-                }
+
+                },
+                {'compute_metrics': ParameterValue(LaunchConfiguration('compute_metrics'), value_type=bool)},
             ]
         )
     ])

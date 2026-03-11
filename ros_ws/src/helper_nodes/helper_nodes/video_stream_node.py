@@ -30,6 +30,9 @@ class VideoStreamer(Node):
             fps = 30.0  # fallback in case FPS is not detected
         self.get_logger().info(f"Streaming video at {fps} FPS")
 
+        self.declare_parameter("debug", False)
+        self.debug = self.get_parameter("debug").get_parameter_value().bool_value
+
         # Timer interval based on video FPS
         self.timer = self.create_timer(1.0 / fps, self.timer_callback)
 
@@ -42,7 +45,8 @@ class VideoStreamer(Node):
 
         msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
         self.publisher_.publish(msg)
-        self.get_logger().info("Published video frame")
+        if self.debug:
+            self.get_logger().info("Published video frame")
 
     def destroy_node(self):
         if self.cap.isOpened():

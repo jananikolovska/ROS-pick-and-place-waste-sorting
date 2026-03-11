@@ -184,4 +184,12 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "compute_metrics",
+            default_value="true",
+            description="Enable performance metrics logging across all nodes in this launch.",
+        )
+    )
+
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

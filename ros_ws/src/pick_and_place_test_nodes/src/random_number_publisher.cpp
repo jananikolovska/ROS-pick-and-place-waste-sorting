@@ -18,12 +18,15 @@ public:
     std::random_device rd;
     rng_ = std::mt19937(rd());
     dist_ = std::uniform_int_distribution<int>(0, 3);
+
+    this->declare_parameter("debug", false);
+    debug_ = this->get_parameter("debug").as_bool();
     
     RCLCPP_INFO(this->get_logger(), "Random Number Publisher started!");
     
-    // Create timer to publish every 20 seconds
+    // Create timer to publish every 1 second
     timer_ = this->create_wall_timer(
-      20s,
+      1s,
       std::bind(&RandomNumberPublisher::timer_callback, this));
   }
 
@@ -39,12 +42,13 @@ private:
     publisher_->publish(message);
     publish_count_++;
     
-    RCLCPP_INFO(this->get_logger(), "Published: %d (total messages: %d)", random_number, publish_count_);
+    if (debug_) RCLCPP_INFO(this->get_logger(), "Published: %d (total messages: %d)", random_number, publish_count_);
   }
 
   rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   int publish_count_;
+  bool debug_ = false;
   std::mt19937 rng_;
   std::uniform_int_distribution<int> dist_;
 };
