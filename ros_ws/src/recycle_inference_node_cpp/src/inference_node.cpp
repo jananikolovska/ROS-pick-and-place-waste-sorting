@@ -673,6 +673,12 @@ void logger(void* arg, axrLogLevel level, const char* msg)
 
 class AxeleraYoloInference : public rclcpp::Node
 {
+    // Track stabilization timing metrics
+    std::unordered_map<int, std::chrono::steady_clock::time_point> track_first_detected_time_;
+    std::deque<double> track_stabilization_times_ms_;
+    double cum_sum_track_stabilization_ms_ = 0.0;
+    size_t cum_count_track_stabilization_ = 0;
+    static constexpr size_t TRACK_STABILIZATION_WINDOW = 50;
 public:
     AxeleraYoloInference()
         : Node("axelera_yolo_inference"),
@@ -695,7 +701,6 @@ public:
         this->declare_parameter("publish_annotated_image", true);
         this->declare_parameter("publish_detection_strings", true);
         this->declare_parameter("publish_class_id", true);
-        this->declare_parameter("every_n_frames", 5);
         this->declare_parameter("crop_ratio", 0.2);
         this->declare_parameter("max_bbox_ratio", 0.9);
         this->declare_parameter("stable_frames_required", 10);
@@ -717,6 +722,7 @@ public:
         confidence_threshold_ = static_cast<float>(this->get_parameter("confidence_threshold").as_double());
         nms_threshold_ = static_cast<float>(this->get_parameter("nms_threshold").as_double());
 
+
         const auto mean_param = this->get_parameter("mean").as_double_array();
         const auto stddev_param = this->get_parameter("stddev").as_double_array();
 
@@ -730,7 +736,6 @@ public:
         }
 
         const std::string annotated_topic_param = this->get_parameter("annotated_topic").as_string();
-        every_n_frames_ = this->get_parameter("every_n_frames").as_int();
         crop_ratio_ = static_cast<float>(this->get_parameter("crop_ratio").as_double());
         max_bbox_ratio_ = static_cast<float>(this->get_parameter("max_bbox_ratio").as_double());
         stable_frames_required_ = this->get_parameter("stable_frames_required").as_int();
@@ -1101,7 +1106,6 @@ private:
     bool has_objectness_{};
     std::string box_type_;
 
-    int every_n_frames_{};
     float crop_ratio_{};
     float max_bbox_ratio_{};
     int stable_frames_required_{};
@@ -1160,6 +1164,17 @@ private:
     std::deque<double> lat_tracking_;
     std::deque<double> lat_end_to_end_;
     std::deque<double> lat_pub_interval_;
+
+    // Cumulative stats for metrics
+    double cum_sum_callback_queue_ = 0.0;
+    double cum_sum_preprocess_ = 0.0;
+    double cum_sum_aipu_ = 0.0;
+    double cum_sum_dequant_ = 0.0;
+    double cum_sum_onnx_ = 0.0;
+    double cum_sum_tracking_ = 0.0;
+    double cum_sum_end_to_end_ = 0.0;
+    double cum_sum_pub_interval_ = 0.0;
+    size_t cum_count_ = 0;
 
     static constexpr size_t METRIC_FPS_WINDOW = 60;
     std::deque<std::chrono::steady_clock::time_point> fps_window_;
@@ -1311,6 +1326,8 @@ private:
             track_avg_center_[track_id] = cur;
             track_streak_[track_id] = 1;
             track_disruption_[track_id] = 0;
+            // Record first detection time for this track
+            track_first_detected_time_[track_id] = std::chrono::steady_clock::now();
         } else {
             auto& avg = it->second;
             const float dx = cur[0] - avg[0];
@@ -1328,11 +1345,26 @@ private:
                     track_streak_[track_id] = 1;
                     track_disruption_[track_id] = 0;
                     track_avg_center_[track_id] = cur;
+                    // Reset first detection time for this track
+                    track_first_detected_time_[track_id] = std::chrono::steady_clock::now();
                 }
             }
         }
 
-        return track_streak_[track_id] >= stable_frames_required_;
+        bool stabilized = track_streak_[track_id] >= stable_frames_required_;
+        if (stabilized && track_first_detected_time_.count(track_id)) {
+            auto now = std::chrono::steady_clock::now();
+            auto first_detected = track_first_detected_time_[track_id];
+            double ms = std::chrono::duration<double, std::milli>(now - first_detected).count();
+            track_stabilization_times_ms_.push_back(ms);
+            cum_sum_track_stabilization_ms_ += ms;
+            cum_count_track_stabilization_++;
+            if (track_stabilization_times_ms_.size() > TRACK_STABILIZATION_WINDOW) {
+                track_stabilization_times_ms_.pop_front();
+            }
+            track_first_detected_time_.erase(track_id);
+        }
+        return stabilized;
     }
 
     bool has_object_destabilized(int track_id, const cv::Vec4f& cur)
@@ -1401,6 +1433,16 @@ private:
         const auto [e2_m, e2_s] = metric_mean_std(lat_end_to_end_);
         const auto [pi_m, pi_s] = metric_mean_std(lat_pub_interval_);
 
+        // Cumulative averages
+        double cum_cq = cum_count_ ? cum_sum_callback_queue_ / cum_count_ : 0.0;
+        double cum_pre = cum_count_ ? cum_sum_preprocess_ / cum_count_ : 0.0;
+        double cum_ai = cum_count_ ? cum_sum_aipu_ / cum_count_ : 0.0;
+        double cum_dq = cum_count_ ? cum_sum_dequant_ / cum_count_ : 0.0;
+        double cum_on = cum_count_ ? cum_sum_onnx_ / cum_count_ : 0.0;
+        double cum_tr = cum_count_ ? cum_sum_tracking_ / cum_count_ : 0.0;
+        double cum_e2 = cum_count_ ? cum_sum_end_to_end_ / cum_count_ : 0.0;
+        double cum_pi = cum_count_ ? cum_sum_pub_interval_ / cum_count_ : 0.0;
+
         double fps = 0.0;
         if (fps_window_.size() >= 2) {
             const double w = ms_between(fps_window_.front(), fps_window_.back()) / 1000.0;
@@ -1416,34 +1458,56 @@ private:
                 static_cast<double>(metric_tracks_created_);
         }
 
+        // Track stabilization metrics
+        double mean_stabilization = 0.0;
+        double std_stabilization = 0.0;
+        if (!track_stabilization_times_ms_.empty()) {
+            double sum = 0.0;
+            for (double ms : track_stabilization_times_ms_) sum += ms;
+            mean_stabilization = sum / track_stabilization_times_ms_.size();
+            double sq_sum = 0.0;
+            for (double ms : track_stabilization_times_ms_) sq_sum += (ms - mean_stabilization) * (ms - mean_stabilization);
+            std_stabilization = std::sqrt(sq_sum / track_stabilization_times_ms_.size());
+        }
+        double cum_mean_stabilization = cum_count_track_stabilization_ > 0 ? cum_sum_track_stabilization_ms_ / cum_count_track_stabilization_ : 0.0;
+
         char buf[4096];
         std::snprintf(
             buf,
             sizeof(buf),
-            "\n========== Inference Node Metrics ==========\n"
-            "  Frames received         : %lu\n"
-            "  Frames processed        : %lu  (1 of every %d)\n"
-            "  Inference FPS           : %.2f fps  (last %zu-frame window)\n"
-            "  --- Stage Latencies (mean +/- std ms, last %zu frames) ---\n"
-            "  Callback queue delay    : %7.2f +/- %.2f ms\n"
-            "  Preprocessing           : %7.2f +/- %.2f ms\n"
-            "  AIPU inference          : %7.2f +/- %.2f ms\n"
-            "  Dequantisation          : %7.2f +/- %.2f ms\n"
-            "  ONNX postprocess        : %7.2f +/- %.2f ms\n"
-            "  Tracking state machine  : %7.2f +/- %.2f ms\n"
-            "  End-to-end (callback)   : %7.2f +/- %.2f ms\n"
-            "  --- Publish Stats ---\n"
-            "  Int32 detections pub'd  : %lu\n"
-            "  Int32 re-publishes      : %lu\n"
-            "  Re-pub interval jitter  : %7.2f +/- %.2f ms  (target %.0f ms)\n"
-            "  --- Track Stats ---\n"
-            "  Tracks created          : %lu\n"
-            "  Tracks stabilised       : %lu\n"
-            "  Stability rate          : %.1f%%\n"
-            "============================================",
+            "\n========== Inference Node Metrics =========="
+            "\n  Frames received         : %lu"
+            "\n  Frames processed        : %lu"
+            "\n  Inference FPS           : %.2f fps  (last %zu-frame window)"
+            "\n  --- Stage Latencies (mean +/- std ms, last %zu frames) ---"
+            "\n  Callback queue delay    : %7.2f +/- %.2f ms"
+            "\n  Preprocessing           : %7.2f +/- %.2f ms"
+            "\n  AIPU inference          : %7.2f +/- %.2f ms"
+            "\n  Dequantisation          : %7.2f +/- %.2f ms"
+            "\n  ONNX postprocess        : %7.2f +/- %.2f ms"
+            "\n  Tracking state machine  : %7.2f +/- %.2f ms"
+            "\n  End-to-end (callback)   : %7.2f +/- %.2f ms"
+            "\n  --- Cumulative Averages (all frames) ---"
+            "\n  Callback queue delay    : %7.2f ms"
+            "\n  Preprocessing           : %7.2f ms"
+            "\n  AIPU inference          : %7.2f ms"
+            "\n  Dequantisation          : %7.2f ms"
+            "\n  ONNX postprocess        : %7.2f ms"
+            "\n  Tracking state machine  : %7.2f ms"
+            "\n  End-to-end (callback)   : %7.2f ms"
+            "\n  --- Publish Stats ---"
+            "\n  Int32 detections pub'd  : %lu"
+            "\n  Int32 re-publishes      : %lu"
+            "\n  Re-pub interval jitter  : %7.2f +/- %.2f ms  (target %.0f ms)"
+            "\n  --- Track Stats ---"
+            "\n  Tracks created          : %lu"
+            "\n  Tracks stabilised       : %lu"
+            "\n  Stability rate          : %.1f%%"
+            "\n  Track stabilization time (ms): %7.2f +/- %.2f (rolling last %zu)"
+            "\n  Track stabilization time (ms): %7.2f (cumulative)"
+            "\n============================================",
             metric_frames_received_,
             metric_frames_processed_,
-            every_n_frames_,
             fps,
             fps_window_.size(),
             METRIC_WINDOW,
@@ -1454,12 +1518,21 @@ private:
             on_m, on_s,
             tr_m, tr_s,
             e2_m, e2_s,
+            cum_cq,
+            cum_pre,
+            cum_ai,
+            cum_dq,
+            cum_on,
+            cum_tr,
+            cum_e2,
             metric_detections_pub_,
             metric_republishes_,
             pi_m, pi_s, publish_interval_ * 1000.0f,
             metric_tracks_created_,
             metric_tracks_stabilized_,
-            stability_rate);
+            stability_rate,
+            mean_stabilization, std_stabilization, TRACK_STABILIZATION_WINDOW,
+            cum_mean_stabilization);
 
         RCLCPP_INFO(this->get_logger(), "%s", buf);
 
@@ -1507,9 +1580,6 @@ private:
     void process_image(const cv::Mat& frame)
     {
         frame_count_++;
-        if (frame_count_ % every_n_frames_ != 0) {
-            return;
-        }
 
         if (compute_metrics_) {
             metric_frames_processed_++;
@@ -1518,6 +1588,8 @@ private:
             if (fps_window_.size() > METRIC_FPS_WINDOW) {
                 fps_window_.pop_front();
             }
+            // Increment cumulative count
+            cum_count_++;
         }
 
         const auto t_proc_start = std::chrono::steady_clock::now();
@@ -1782,7 +1854,7 @@ private:
 
         for (auto& [tid, hist] : detection_tracks_) {
             if (!hist.empty() &&
-                frame_count_ - std::get<0>(hist.back()) > 60 * every_n_frames_) {
+                frame_count_ - std::get<0>(hist.back()) > 60) {
                 tracks_to_remove_buf_.push_back(tid);
             }
         }
@@ -1915,16 +1987,18 @@ private:
             (void)bbox;
             (void)conf;
 
-            auto it_cls = class_id_map_.find(cls_id);
+            int publish_cls_id = cls_id;
+
+            auto it_cls = class_id_map_.find(publish_cls_id);
             const std::string cname =
                 (it_cls != class_id_map_.end()) ? it_cls->second : "unknown";
 
             last_published_objects_.clear();
-            last_published_objects_[track_id] = {cls_id, now};
+            last_published_objects_[track_id] = {publish_cls_id, now};
 
             if (publish_class_id_) {
                 std_msgs::msg::Int32 class_msg;
-                class_msg.data = cls_id;
+                class_msg.data = publish_cls_id;
                 class_pub_->publish(class_msg);
                 if (compute_metrics_) {
                     metric_detections_pub_++;
@@ -1935,7 +2009,7 @@ private:
                 RCLCPP_INFO(
                     this->get_logger(),
                     "[PUBLISH] Int32: %d (%s) - Track #%d",
-                    cls_id, cname.c_str(), track_id);
+                    publish_cls_id, cname.c_str(), track_id);
             }
 
             if (save_results_ && !annotated_frame.empty()) {
@@ -2004,6 +2078,16 @@ private:
             metric_push(lat_onnx_, ms_between(t3, t4));
             metric_push(lat_tracking_, ms_between(t4, t5));
             metric_push(lat_end_to_end_, ms_between(t_proc_start, t5));
+
+            // Update cumulative sums
+            cum_sum_callback_queue_ += lat_callback_queue_.empty() ? 0.0 : lat_callback_queue_.back();
+            cum_sum_preprocess_ += ms_between(t0, t1);
+            cum_sum_aipu_ += ms_between(t1, t2);
+            cum_sum_dequant_ += ms_between(t2, t3);
+            cum_sum_onnx_ += ms_between(t3, t4);
+            cum_sum_tracking_ += ms_between(t4, t5);
+            cum_sum_end_to_end_ += ms_between(t_proc_start, t5);
+            cum_sum_pub_interval_ += lat_pub_interval_.empty() ? 0.0 : lat_pub_interval_.back();
         }
     }
 };

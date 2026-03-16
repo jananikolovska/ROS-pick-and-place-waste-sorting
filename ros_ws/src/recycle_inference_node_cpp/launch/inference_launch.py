@@ -47,7 +47,6 @@ def generate_launch_description():
                     'nms_threshold': 0.45,
 
                     # --- Frame processing ---
-                    'every_n_frames': 5,
                     'crop_ratio': 0.2,
 
                     # --- Detection filtering ---
@@ -55,10 +54,10 @@ def generate_launch_description():
                     'keep_largest_only': True,
 
                     # --- Stable placement detection ---
-                    'stable_frames_required': 10,
-                    'variance_threshold': 30.0,
-                    'destabilize_threshold': 50.0,
-                    'false_detection_frames': 10,
+                    'stable_frames_required': 20,
+                    'variance_threshold': 15.0,
+                    'destabilize_threshold': 30.0,
+                    'false_detection_frames': 7,
 
                     # --- Publishing ---
                     'publish_interval': 0.25,
@@ -68,7 +67,7 @@ def generate_launch_description():
                     'save_dir': 'yolo_results',
 
                 },
-                {'compute_metrics': ParameterValue(LaunchConfiguration('compute_metrics'), value_type=bool)},
+                {'compute_metrics': ParameterValue(LaunchConfiguration('compute_metrics'), value_type=bool)}
             ]
         )
     ])
