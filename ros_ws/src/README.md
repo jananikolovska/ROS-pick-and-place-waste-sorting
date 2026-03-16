@@ -69,6 +69,16 @@ This will start the node, which subscribes to camera frames, runs inference, and
 - Ensure the Axelera AI M.2 accelerator is installed and configured on your system.
 - The node requires Axelera's Voyager SDK 1.4 to be installed for proper operation.
 
+## Environment Setup
+
+Before running any ROS 2 or inference nodes, you must set up your environment in every terminal you open. Use the provided script:
+
+```
+source ros_ws/workspace.sh
+```
+
+This script sets all required environment variables, activates the Python virtual environment for the Axelera SDK, and sources the correct ROS 2 and workspace setup files. Always run this before launching or running any nodes.
+
 ## System Visualization
 
 Below is a GIF showing the simulation running in Gazebo:
