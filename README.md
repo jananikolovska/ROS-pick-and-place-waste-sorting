@@ -4,6 +4,8 @@ Jana Nikolovska
 University of Bologna  
 Master Thesis in Artificial Intelligence
 
+![Demo](media/demo.gif)
+
 **Purpose:** This project demonstrates the integration of the Axelera Metis M.2 AI accelerator with ROS 2 for real-time perception, using a validation scenario focused on intelligent waste sorting. The system is designed to showcase a complete perception-to-action pipeline, with a focus on robust, hardware-accelerated object detection and its use in a simulated pick-and-place task.
 
 ---
@@ -20,6 +22,10 @@ Master Thesis in Artificial Intelligence
 - **Results:** The `results` directory contains experimental results and data included in the thesis.
 
 For a detailed description of the ROS-based flow, node parameters, and launch instructions, see the README inside `ros_ws`.
+
+![](media/software-hardware.drawio.png)
+
+![](media/validation_workspace.drawio.png)
 
 ---
 
